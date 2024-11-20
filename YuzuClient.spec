@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('background.mp3', '.'), ('background.png', '.'), ('yuzu.ico', '.')],
+    datas=[('background.mp3', '.'), ('background.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['yuzu.ico'],
 )
