@@ -6,7 +6,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('background.png', '.'), ('background.mp3', '.'), ('yuzu.ico', '.')],
-    hiddenimports=['pygame', 'PIL', 'requests'],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['yuzu.ico'],
 )
