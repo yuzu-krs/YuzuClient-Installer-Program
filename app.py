@@ -102,6 +102,10 @@ button_style = {
     "cursor": "hand2"
 }
 
+# マインクラフトの起動に関するメッセージラベル
+info_label = tk.Label(root, text="ver1.8.8のマインクラフトを１度起動する必要があります。", font=("Arial", 12), fg="red", bg="#f0f0f0")
+info_label.place(relx=0.5, rely=0.4, anchor="center")  # ボタンの上に表示
+
 # ダウンロード開始ボタン
 download_button = tk.Button(root, text="ダウンロード開始", command=start_download, **button_style)
 download_button.place(relx=0.5, rely=0.5, anchor="center")  # ウィンドウ中央に配置
