@@ -19,11 +19,9 @@ background_music_path = os.path.join(base_path, "background.mp3")
 icon_path = os.path.join(base_path, "yuzu.ico")
 
 # ダウンロード関数
+# ダウンロード関数（上書き処理を追加）
 def download_file(url, save_path, progress_var):
-    if os.path.exists(save_path):  # ファイルがすでに存在するか確認
-        print(f"{save_path} はすでに存在します。ダウンロードをスキップします。")
-        return  # ファイルが存在する場合はダウンロードをスキップ
-
+    # 既存のファイルがあっても強制的に上書き
     response = requests.get(url, stream=True)
     response.raise_for_status()
 
@@ -103,7 +101,7 @@ button_style = {
 }
 
 # マインクラフトの起動に関するメッセージラベル
-info_label = tk.Label(root, text="ver1.8.8のマインクラフトを１度起動する必要があります。", font=("Arial", 12), fg="red", bg="#f0f0f0")
+info_label = tk.Label(root, text="ver1.8.8のマインクラフトを１度起動してからダウンロードを開始してください。", font=("Arial", 12), fg="red", bg="#f0f0f0")
 info_label.place(relx=0.5, rely=0.4, anchor="center")  # ボタンの上に表示
 
 # ダウンロード開始ボタン
