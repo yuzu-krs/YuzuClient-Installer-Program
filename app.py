@@ -8,6 +8,7 @@ from PIL import Image, ImageTk  # 背景画像表示のためにPillowを使用
 import zipfile  # ZIP解凍のために使用
 import winsound  # 警告音のために使用
 import threading  # スレッド処理のために使用
+import subprocess  # YuzuClient実行用
 
 
 # 実行ファイルがPyInstallerでビルドされたかどうかのチェック
@@ -20,16 +21,24 @@ else:
 background_image_path = os.path.join(base_path, "background.png")
 icon_path = os.path.join(base_path, "yuzu.ico")
 
-# 完了後のUI更新処理
 def finish_ui_update():
     progress_bar.place_forget()
     progress_text_label.place_forget()
     status_label.config(text="インストールが完了しました")
     install_button.config(state="normal", text="完了", command=finish_installation)
     cancel_button.config(state="disabled")  # キャンセルボタンを無効化
+    run_checkbox.place(relx=0.55, rely=0.948, anchor="w")  # チェックボックスを表示
+
+
 
 # 完了ボタンの動作
 def finish_installation():
+    if run_var.get():  # チェックボックスが選択されている場合
+        minecraft_exe_path = r"C:\XboxGames\Minecraft Launcher\Content\Minecraft.exe"
+        if os.path.exists(minecraft_exe_path):
+            subprocess.Popen([minecraft_exe_path])
+        else:
+            messagebox.showerror("エラー", "Minecraftの実行ファイルが見つかりません。パスを確認してください。")
     root.quit()
 
 # キャンセル時に使うフラグ
@@ -153,6 +162,12 @@ cancel_button.pack(side="right", padx=10)
 # インストールボタン
 install_button = ttk.Button(button_frame, text="インストール", command=start_download_thread)
 install_button.pack(side="right", padx=10)
+
+# 実行するチェックボックス
+# 実行するチェックボックス
+run_var = tk.BooleanVar()
+run_checkbox = ttk.Checkbutton(root, text="Minecraft Launcherを実行", variable=run_var)
+
 
 status_label = tk.Label(button_frame, text="", bg="#f0f0f0", anchor="w", font=("Arial", 8))
 status_label.pack(fill="x", padx=(20, 10), side="left")
