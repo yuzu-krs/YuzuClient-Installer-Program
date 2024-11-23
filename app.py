@@ -5,7 +5,10 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from PIL import Image, ImageTk  # 背景画像表示のためにPillowを使用
-import pygame  # 音楽再生のためにpygameを使用
+import zipfile  # ZIP解凍のために使用
+import winsound  # 警告音のために使用
+import threading  # スレッド処理のために使用
+
 
 # 実行ファイルがPyInstallerでビルドされたかどうかのチェック
 if getattr(sys, 'frozen', False):
@@ -15,104 +18,143 @@ else:
 
 # リソースファイルのパス設定
 background_image_path = os.path.join(base_path, "background.png")
-background_music_path = os.path.join(base_path, "background.mp3")
 icon_path = os.path.join(base_path, "yuzu.ico")
 
+# 完了後のUI更新処理
+def finish_ui_update():
+    progress_bar.place_forget()
+    progress_text_label.place_forget()
+    status_label.config(text="インストールが完了しました")
+    install_button.config(state="normal", text="完了", command=finish_installation)
+    cancel_button.config(state="disabled")  # キャンセルボタンを無効化
+
+# 完了ボタンの動作
+def finish_installation():
+    root.quit()
+
+# キャンセル時に使うフラグ
+cancel_flag = threading.Event()
+
+# ダウンロード開始（スレッド化）
+def start_download_thread():
+    # スレッドを作成して開始
+    download_thread = threading.Thread(target=start_download, daemon=True)
+    download_thread.start()
+
 # ダウンロード関数
-# ダウンロード関数（上書き処理を追加）
-def download_file(url, save_path, progress_var):
-    # 既存のファイルがあっても強制的に上書き
+def download_file(url, save_path, progress_var, status_label, progress_text_label, file_index, total_files):
+    file_name = os.path.basename(save_path)
+    status_label.config(text=f"{file_name} {file_index}/{total_files}")
+    root.update_idletasks()
+
     response = requests.get(url, stream=True)
     response.raise_for_status()
 
     total_size = int(response.headers.get('Content-Length', 0))
-    with open(save_path, 'wb') as file:  # 'wb'モードでファイルを開くと既存ファイルは上書きされる
+    with open(save_path, 'wb') as file:
         downloaded = 0
         for chunk in response.iter_content(chunk_size=1024):
+            if cancel_flag.is_set():  # キャンセルが要求されている場合
+                status_label.config(text="ダウンロードがキャンセルされました。")
+                return
             if chunk:
                 file.write(chunk)
                 downloaded += len(chunk)
                 if total_size > 0:
-                    progress_var.set((downloaded / total_size) * 100)
-                root.update_idletasks()
+                    progress_percentage = (downloaded / total_size) * 100
+                    progress_var.set(progress_percentage)
+                    progress_text_label.config(
+                        text=f"{int(downloaded / 1024 / 1024)}MB / {int(total_size / 1024 / 1024)}MB"
+                    )
+                root.update_idletasks()  # 更新を即座に反映
 
+# ダウンロード開始処理
 def start_download():
-    # ダウンロード開始ボタンを無効化し、テキストを変更
-    download_button.config(state="disabled", text="ダウンロード中...")
-    progress_bar.place(relx=0.5, rely=0.6, anchor="center")  # プログレスバーを表示
+    try:
+        install_button.config(state="disabled", text="インストール中...")
+        progress_bar.place(relx=0.43, rely=0.5, anchor="center")
+        progress_text_label.place(relx=0.0256, rely=0.984, anchor="w")
 
-    # ダウンロード対象のURLリスト
-    urls = [
-        "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/YuzuClient.jar",
-        "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/steve.mp3",
-        "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/YuzuClient.json"
-    ]
-    save_dir = os.path.join(os.getenv("APPDATA"), ".minecraft", "versions", "YuzuClient")
-    os.makedirs(save_dir, exist_ok=True)
+        save_dir = os.path.join(os.getenv("APPDATA"), ".minecraft", "versions", "YuzuClient")
+        downloads = [
+            {
+                "url": "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/YuzuClient.jar",
+                "save_path": os.path.join(save_dir, "YuzuClient.jar")
+            },
+            {
+                "url": "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/steve.mp3",
+                "save_path": os.path.join(save_dir, "steve.mp3")
+            },
+            {
+                "url": "https://github.com/yuzu-krs/YuzuClientInstaller/raw/refs/heads/main/YuzuClient.json",
+                "save_path": os.path.join(save_dir, "YuzuClient.json")
+            }
+        ]
 
-    progress_var.set(0)
-    for url in urls:
-        filename = url.split("/")[-1]
-        save_path = os.path.join(save_dir, filename)
-        download_file(url, save_path, progress_var)
+        progress_var.set(0)
+        total_files = len(downloads)
+        for i, download in enumerate(downloads, start=1):
+            if cancel_flag.is_set():  # キャンセルチェック
+                break
+            os.makedirs(os.path.dirname(download["save_path"]), exist_ok=True)
+            download_file(
+                download["url"], download["save_path"],
+                progress_var, status_label, progress_text_label, i, total_files
+            )
 
-    progress_bar.place_forget()  # ダウンロード完了後に進行状況バーを非表示
-    download_button.config(state="disabled", text="ダウンロード完了!")  # ダウンロード完了後はボタンを無効にする
-    close_button.place(relx=0.5, rely=0.6, anchor="center")  # 閉じるボタンを表示
+        if not cancel_flag.is_set():
+            root.after(0, finish_ui_update)
+    except Exception as e:
+        messagebox.showerror("エラー", f"エラーが発生しました: {e}")
 
-# 背景音楽再生の設定
-def play_background_music():
-    pygame.mixer.init()  # pygameのミキサーを初期化
-    pygame.mixer.music.load(background_music_path)  # 音楽ファイルの読み込み
-    pygame.mixer.music.set_volume(0.1)  # 音量を設定（0.0〜1.0の範囲）
-    pygame.mixer.music.play(-1)  # 音楽をループで再生
+# キャンセルボタンの処理
+def cancel_download():
+    winsound.MessageBeep(winsound.MB_ICONHAND)  # 警告音を鳴らす
+    confirm = messagebox.askyesno("YuzuClient セットアップ", "YuzuClient セットアップを中止しますか？")
+    if confirm:
+        cancel_flag.set()  # キャンセルフラグをセット
+        root.quit()  # GUIを閉じる
 
 # GUI作成
 root = tk.Tk()
-root.title("YuzuClient - Installer")
-root.geometry("800x600")  # ウィンドウのサイズを指定
+root.title("YuzuClient セットアップ")
+root.geometry("800x500")  # ウィンドウのサイズを800x500に変更
 root.resizable(False, False)  # ウィンドウのリサイズを無効化
 
 # アイコン設定
-root.iconbitmap(icon_path)  # アイコンを設定
+root.iconbitmap(icon_path)
 
 # 背景画像の設定
-background_image = Image.open(background_image_path)  # 背景画像を読み込む
-background_image = background_image.resize((800, 600), Image.Resampling.LANCZOS)  # ウィンドウサイズに合わせてリサイズ
+background_image = Image.open(background_image_path)
+background_image = background_image.resize((800, 500), Image.Resampling.LANCZOS)
 bg = ImageTk.PhotoImage(background_image)
 
-canvas = tk.Canvas(root, width=800, height=600)
+canvas = tk.Canvas(root, width=800, height=500)
 canvas.pack(fill="both", expand=True)
 canvas.create_image(0, 0, image=bg, anchor="nw")
 
-# 進行状況バー
+# ボタン用帯（下部に配置）
+button_frame = tk.Frame(root, bg="#f0f0f0", bd=1)
+button_frame.place(relx=0, rely=0.9, relwidth=1, relheight=0.1)
+
+# 進行状況バー（初期状態では非表示）
 progress_var = tk.DoubleVar()
-progress_bar = ttk.Progressbar(root, length=400, mode='determinate', variable=progress_var)
 
-# ボタンデザイン
-button_style = {
-    "bg": "#4CAF50",  # グリーン系
-    "fg": "white",
-    "font": ("Arial", 12, "bold"),
-    "activebackground": "#45a049",
-    "relief": "raised",
-    "bd": 5,
-    "cursor": "hand2"
-}
+progress_bar = ttk.Progressbar(button_frame, length=450, mode='determinate', variable=progress_var)
 
-# マインクラフトの起動に関するメッセージラベル
-info_label = tk.Label(root, text="ver1.8.8のマインクラフトを１度起動してからダウンロードを開始してください。", font=("Arial", 12), fg="red", bg="#f0f0f0")
-info_label.place(relx=0.5, rely=0.4, anchor="center")  # ボタンの上に表示
+# 進行状況表示用ラベル（初期状態では非表示）
+progress_text_label = tk.Label(root, text="", bg="#f0f0f0", font=("Arial", 7))
+progress_text_label.place(relx=1, rely=0.98, anchor="e")
 
-# ダウンロード開始ボタン
-download_button = tk.Button(root, text="ダウンロード開始", command=start_download, **button_style)
-download_button.place(relx=0.5, rely=0.5, anchor="center")  # ウィンドウ中央に配置
+# キャンセルボタン
+cancel_button = ttk.Button(button_frame, text="キャンセル", command=cancel_download)
+cancel_button.pack(side="right", padx=10)
 
-# 閉じるボタン
-close_button = tk.Button(root, text="閉じる", command=root.quit, **button_style)
-close_button.place_forget()  # 初期状態では非表示
+# インストールボタン
+install_button = ttk.Button(button_frame, text="インストール", command=start_download_thread)
+install_button.pack(side="right", padx=10)
 
-# 背景音楽を再生
-play_background_music()
+status_label = tk.Label(button_frame, text="", bg="#f0f0f0", anchor="w", font=("Arial", 8))
+status_label.pack(fill="x", padx=(20, 10), side="left")
 
 root.mainloop()
